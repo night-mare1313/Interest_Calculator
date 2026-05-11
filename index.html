@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interest Ledger V17 - Professional Excel</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; margin: 20px; background: #f4f7f6; color: #333; }
+        .container { max-width: 1350px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        .dynamic-header { text-align: center; margin-bottom: 20px; border-bottom: 3px double #1a237e; padding-bottom: 10px; }
+        .dynamic-header h1 { margin: 0; color: #1a237e; text-transform: uppercase; letter-spacing: 2px; }
+        .setup-bar { display: flex; gap: 15px; margin-bottom: 20px; background: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; flex-wrap: wrap; }
+        .setup-bar div { flex: 1; min-width: 200px; }
+        label { font-size: 0.75rem; font-weight: bold; color: #555; display: block; margin-bottom: 5px; }
+        input, button { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+        .summary { display: flex; justify-content: space-around; margin: 20px 0; padding: 20px; background: #1a237e; color: white; border-radius: 10px; }
+        .summary span { display: block; font-size: 1.5rem; font-weight: bold; color: #ffeb3b; }
+        .grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 20px; }
+        .box { padding: 15px; border-radius: 8px; border: 1px solid #eee; background: #fff; }
+        .loan-box { border-top: 6px solid #d32f2f; }
+        .pay-box { border-top: 6px solid #388e3c; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.8rem; }
+        th, td { border: 1px solid #e0e0e0; padding: 8px 4px; text-align: left; }
+        th { background: #f1f3f4; }
+        .total-row { background: #fffde7; font-weight: bold; font-size: 0.85rem; }
+        .del-btn { color: #d32f2f; cursor: pointer; border: none; background: none; font-weight: bold; }
+        @media print { .no-print { display: none !important; } .container { box-shadow: none; width: 100%; } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="dynamic-header">
+        <h1 id="top-display-name">TEST</h1>
+        <div id="print-sub-header" style="font-weight: bold; margin-top: 5px;"></div>
+    </div>
+
+    <div class="no-print">
+        <div class="setup-bar">
+            <div><label>Company / Personal Name</label><input type="text" id="firmName" value="TEST" oninput="calculate()"></div>
+            <div><label>Party Name</label><input type="text" id="party" placeholder="Buyer Name" oninput="calculate()"></div>
+            <div><label>Rate (% p.a.)</label><input type="number" id="rate" value="15" onchange="calculate()"></div>
+            <div><label>Calculate Up To</label><input type="date" id="asOf" onchange="calculate()"></div>
+        </div>
+    </div>
+
+    <div class="summary">
+        <div>Principal O/S<span id="stat-p">₹0/-</span></div>
+        <div>Net Interest Due<span id="stat-i">₹0/-</span></div>
+        <div>Final Balance<span id="stat-t">₹0/-</span></div>
+    </div>
+
+    <div class="grid">
+        <div class="box loan-box">
+            <h3>📤 DEBIT (BILLS)</h3>
+            <div class="no-print" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+                <input type="date" id="l-date">
+                <input type="number" id="l-credit" placeholder="Credit Days">
+                <input type="number" id="l-amt" placeholder="Amount">
+                <input type="text" id="l-note" placeholder="Bill No / Ref">
+                <button style="grid-column: span 2; background:#d32f2f; color:white; font-weight:bold;" onclick="addRow('loans')">Add Debit Entry</button>
+            </div>
+            <table id="loan-table">
+                <thead><tr><th>Date</th><th>Ref</th><th>Due Date</th><th>Amount</th><th>Days</th><th>Interest</th><th class="no-print"></th></tr></thead>
+                <tbody></tbody>
+                <tfoot><tr id="loan-total-row" class="total-row"></tr></tfoot>
+            </table>
+        </div>
+
+        <div class="box pay-box">
+            <h3>📥 CREDIT (RECEIPTS)</h3>
+            <div class="no-print" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+                <input type="date" id="p-date">
+                <input type="number" id="p-amt" placeholder="Amount Received">
+                <input type="text" id="p-note" placeholder="Ref/Chq No">
+                <button style="background:#388e3c; color:white; font-weight:bold;" onclick="addRow('payments')">Add Receipt Entry</button>
+            </div>
+            <table id="pay-table">
+                <thead><tr><th>Date</th><th>Ref</th><th>Amount</th><th>Days</th><th>Interest (-)</th><th class="no-print"></th></tr></thead>
+                <tbody></tbody>
+                <tfoot><tr id="pay-total-row" class="total-row"></tr></tfoot>
+            </table>
+        </div>
+    </div>
+
+    <div class="no-print" style="margin-top:20px; display:flex; gap:10px;">
+        <button onclick="exportExcel()" style="background:#2e7d32; color:white; flex:1; font-weight:bold;">📥 Download Styled Excel (.xlsx)</button>
+        <button onclick="window.print()" style="background:#1976d2; color:white; flex:1; font-weight:bold;">📄 Print PDF</button>
+        <button onclick="clearData()" style="background:#546e7a; color:white; flex:1; font-weight:bold;">🗑️ Reset All</button>
+    </div>
+</div>
+
+<script>
+    let data = JSON.parse(localStorage.getItem('textileV17')) || { loans: [], payments: [] };
+    let calculatedLoans = [];
+    let calculatedPays = [];
+
+    function toIndianDate(isoDate) {
+        if(!isoDate) return "";
+        const [y, m, d] = isoDate.split('-');
+        return `${d}-${m}-${y}`;
+    }
+
+    function setInitialAsOf() {
+        const allDates = [...data.loans, ...data.payments].map(x => x.date).sort();
+        document.getElementById('asOf').value = allDates.length > 0 ? allDates[allDates.length - 1] : new Date().toISOString().split('T')[0];
+    }
+
+    function addRow(type) {
+        const p = type === 'loans' ? 'l' : 'p';
+        const date = document.getElementById(`${p}-date`).value;
+        const amt = parseFloat(document.getElementById(`${p}-amt`).value);
+        if(!date || !amt) return;
+
+        data[type].push({ 
+            id: Date.now(), 
+            date, 
+            amt, 
+            note: document.getElementById(`${p}-note`).value.trim(), 
+            credit: type === 'loans' ? (parseInt(document.getElementById('l-credit').value) || 0) : 0 
+        });
+        
+        document.getElementById('asOf').value = date;
+        localStorage.setItem('textileV17', JSON.stringify(data));
+        calculate();
+        document.getElementById(`${p}-amt`).value = '';
+        document.getElementById(`${p}-note`).value = '';
+    }
+
+    function calculate() {
+        const rate = parseFloat(document.getElementById('rate').value) / 100;
+        const asOf = new Date(document.getElementById('asOf').value);
+        const partyName = (document.getElementById('party').value || "VALUED PARTY").toUpperCase();
+        const firmName = (document.getElementById('firmName').value.trim() || "CHHAPARIA EXPORTS").toUpperCase();
+
+        document.getElementById('top-display-name').innerText = firmName;
+        document.getElementById('print-sub-header').innerText = `${partyName} STATEMENT | RATE: ${document.getElementById('rate').value}% | AS ON: ${toIndianDate(document.getElementById('asOf').value)}`;
+
+        calculatedLoans = data.loans.map(l => ({...l, remaining: l.amt, interest: 0, days: 0}));
+        calculatedPays = data.payments.map(p => ({...p, remaining: p.amt, interest: 0, days: 0}));
+        
+        calculatedLoans.sort((a,b) => new Date(a.date) - new Date(b.date));
+        calculatedPays.sort((a,b) => new Date(a.date) - new Date(b.date));
+
+        calculatedLoans.forEach(loan => {
+            let dDate = new Date(loan.date);
+            dDate.setDate(dDate.getDate() + loan.credit);
+            loan.days = Math.max(0, Math.ceil((asOf - dDate) / 86400000));
+            loan.interest = loan.amt * rate * (loan.days / 365);
+
+            calculatedPays.forEach(pay => {
+                if (pay.remaining <= 0 || loan.remaining <= 0) return;
+                let pDate = new Date(pay.date);
+                if (pDate <= dDate) {
+                    let settle = Math.min(pay.remaining, loan.remaining);
+                    pay.remaining -= settle; loan.remaining -= settle;
+                    return;
+                }
+                let settle = Math.min(pay.remaining, loan.remaining);
+                let savedDays = Math.max(0, Math.ceil((asOf - pDate) / 86400000));
+                pay.interest += settle * rate * (savedDays / 365);
+                pay.days = savedDays;
+                pay.remaining -= settle; loan.remaining -= settle;
+            });
+        });
+        render();
+    }
+
+    function render() {
+        const lb = document.querySelector("#loan-table tbody");
+        const pb = document.querySelector("#pay-table tbody");
+        lb.innerHTML = pb.innerHTML = "";
+        let dl = 0, cl = 0, di = 0, ci = 0;
+
+        calculatedLoans.forEach(l => {
+            dl += l.amt; di += l.interest;
+            let dd = new Date(l.date); dd.setDate(dd.getDate() + l.credit);
+            lb.innerHTML += `<tr><td>${toIndianDate(l.date)}</td><td>${l.note || 'Debit'}</td><td>${toIndianDate(dd.toISOString().split('T')[0])}</td><td>₹${Math.round(l.amt).toLocaleString('en-IN')}/-</td><td>${l.days}</td><td>₹${Math.round(l.interest).toLocaleString('en-IN')}/-</td><td class="no-print"><button class="del-btn" onclick="deleteRow('loans',${l.id})">×</button></td></tr>`;
+        });
+        calculatedPays.forEach(p => {
+            cl += p.amt; ci += p.interest;
+            pb.innerHTML += `<tr><td>${toIndianDate(p.date)}</td><td>${p.note || 'Receipt'}</td><td>₹${Math.round(p.amt).toLocaleString('en-IN')}/-</td><td>${p.days}</td><td>₹${Math.round(p.interest).toLocaleString('en-IN')}/-</td><td class="no-print"><button class="del-btn" onclick="deleteRow('payments',${p.id})">×</button></td></tr>`;
+        });
+
+        document.getElementById('loan-total-row').innerHTML = `<td colspan="3">TOTAL DEBIT</td><td>₹${Math.round(dl).toLocaleString('en-IN')}/-</td><td>-</td><td>₹${Math.round(di).toLocaleString('en-IN')}/-</td><td class="no-print"></td>`;
+        document.getElementById('pay-total-row').innerHTML = `<td colspan="2">TOTAL CREDIT</td><td>₹${Math.round(cl).toLocaleString('en-IN')}/-</td><td>-</td><td>₹${Math.round(ci).toLocaleString('en-IN')}/-</td><td class="no-print"></td>`;
+
+        document.getElementById('stat-p').innerText = `₹${Math.round(dl - cl).toLocaleString('en-IN')}/-`;
+        document.getElementById('stat-i').innerText = `₹${Math.round(di - ci).toLocaleString('en-IN')}/-`;
+        document.getElementById('stat-t').innerText = `₹${Math.round((dl - cl) + (di - ci)).toLocaleString('en-IN')}/-`;
+    }
+
+    function deleteRow(type, id) {
+        data[type] = data[type].filter(x => x.id !== id);
+        localStorage.setItem('textileV17', JSON.stringify(data));
+        calculate();
+    }
+
+    async function exportExcel() {
+        const party = (document.getElementById('party').value || "Party").toUpperCase();
+        const company = (document.getElementById('firmName').value.trim() || "CHHAPARIA EXPORTS").toUpperCase();
+        const asOfVal = toIndianDate(document.getElementById('asOf').value);
+        const rateVal = document.getElementById('rate').value;
+
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('Interest Ledger');
+
+        // Styles
+        const boldFont = { bold: true };
+        const centerAlign = { horizontal: 'center' };
+        const border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+
+        // Headers
+        const r1 = sheet.getRow(1);
+        r1.getCell(1).value = company;
+        r1.getCell(1).font = { size: 16, bold: true };
+        sheet.mergeCells('A1:J1');
+        r1.getCell(1).alignment = centerAlign;
+
+        sheet.getRow(3).getCell(1).value = `${party} STATEMENT`;
+        sheet.getRow(3).getCell(1).font = boldFont;
+        sheet.getRow(4).getCell(1).value = `Interest Rate: ${rateVal}% | As On: ${asOfVal}`;
+
+        // Table Header
+        sheet.getRow(6).getCell(1).value = "DEBIT (BILLS)";
+        sheet.getRow(6).getCell(1).font = boldFont;
+        sheet.getRow(6).getCell(6).value = "CREDIT (RECEIPTS)";
+        sheet.getRow(6).getCell(6).font = boldFont;
+
+        const headerRow = sheet.getRow(7);
+        const headers = ["Date", "Ref", "Amount", "Days", "Interest", "Date", "Ref", "Amount", "Days", "Interest"];
+        headers.forEach((h, i) => {
+            const cell = headerRow.getCell(i + 1);
+            cell.value = h;
+            cell.font = boldFont;
+            cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFF2F2F2'} };
+            cell.border = border;
+        });
+
+        // Data Rows
+        let sumLA = 0, sumLI = 0, sumPA = 0, sumPI = 0;
+        const max = Math.max(calculatedLoans.length, calculatedPays.length);
+        for(let i = 0; i < max; i++){
+            const l = calculatedLoans[i] || {};
+            const p = calculatedPays[i] || {};
+            const row = sheet.getRow(8 + i);
+            
+            row.getCell(1).value = l.date ? toIndianDate(l.date) : "";
+            row.getCell(2).value = l.note || "";
+            row.getCell(3).value = l.amt || 0;
+            row.getCell(4).value = l.date ? l.days : 0;
+            row.getCell(5).value = l.interest ? parseFloat(l.interest.toFixed(2)) : 0;
+
+            row.getCell(6).value = p.date ? toIndianDate(p.date) : "";
+            row.getCell(7).value = p.note || "";
+            row.getCell(8).value = p.amt || 0;
+            row.getCell(9).value = p.date ? p.days : 0;
+            row.getCell(10).value = p.interest ? parseFloat(p.interest.toFixed(2)) : 0;
+
+            sumLA += (l.amt || 0); sumLI += (l.interest || 0);
+            sumPA += (p.amt || 0); sumPI += (p.interest || 0);
+        }
+
+        // Totals Row
+        const totalRowIdx = 8 + max;
+        const tr = sheet.getRow(totalRowIdx);
+        tr.getCell(1).value = "TOTALS";
+        tr.getCell(3).value = sumLA;
+        tr.getCell(5).value = parseFloat(sumLI.toFixed(2));
+        tr.getCell(6).value = "TOTALS";
+        tr.getCell(8).value = sumPA;
+        tr.getCell(10).value = parseFloat(sumPI.toFixed(2));
+        tr.eachCell(c => { c.font = boldFont; c.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFFFF9C4'} }; });
+
+        // Summary Block
+        const startSum = totalRowIdx + 2;
+        sheet.getRow(startSum).getCell(1).value = "NET PRINCIPAL OUTSTANDING";
+        sheet.getRow(startSum).getCell(3).value = (sumLA - sumPA);
+        sheet.getRow(startSum + 1).getCell(1).value = "NET INTEREST DUE";
+        sheet.getRow(startSum + 1).getCell(3).value = (sumLI - sumPI);
+        sheet.getRow(startSum + 2).getCell(1).value = "GRAND TOTAL PAYABLE";
+        sheet.getRow(startSum + 2).getCell(3).value = ((sumLA - sumPA) + (sumLI - sumPI));
+        
+        [startSum, startSum+1, startSum+2].forEach(idx => {
+            sheet.getRow(idx).getCell(1).font = boldFont;
+            sheet.getRow(idx).getCell(3).font = boldFont;
+        });
+
+        // Set column widths
+        sheet.columns.forEach(column => { column.width = 15; });
+
+        // Write and download
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${party}_Report_${asOfVal}.xlsx`;
+        a.click();
+    }
+
+    function clearData() { if(confirm("Clear ledger?")) { data={loans:[],payments:[]}; localStorage.clear(); calculate(); } }
+    
+    setInitialAsOf();
+    calculate();
+</script>
+</body>
+</html>
